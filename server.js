@@ -2,7 +2,15 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const commentRoutes = require('./routes/commentRoute');
-require('dotenv').config();
+
+// swagger packages
+const swaggerUI = require('swagger-ui-express');
+const swaggerSpec = require('./swaggerDocs');
+
+// Documenting the swagger 
+
+app.use("/api-docs",swaggerUI.serve,swaggerUI.setup(swaggerSpec));
+
 
 app.use(bodyParser.json());
 
