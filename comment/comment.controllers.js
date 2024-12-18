@@ -1,5 +1,4 @@
-const { v4: uuidv4 } = require('uuid');  // UUID generation for unique comment IDs
-const { UpdateFile, commentArray } = require('../utils/databaseHandlers');
+const { UpdateFile, commentArray, FetchCommentById, checkIfEmailExists, updateComment,deleteCommentbyId } = require('./comment.repository');
 
 /**
  * Fetches all comments from the database and returns them in the response.
@@ -9,10 +8,10 @@ const { UpdateFile, commentArray } = require('../utils/databaseHandlers');
  * @param {Object} res - The HTTP response object
  * @returns {JSON} - A JSON response with the list of comments or an error message
  */
-const getComments = (req, res) => {
+const getComments = async(req, res) => {
     try {
         // Fetch all comments from the DB
-        const comments = commentArray();  
+        const comments = await commentArray(); 
         if (!comments || comments.length === 0) {
             // Return 404 if no comments found
             return res.status(404).json({
@@ -29,7 +28,7 @@ const getComments = (req, res) => {
             success: true,
             statusCode: 200,
             message: 'Comments fetched successfully.',
-            data: comments,
+            data: comments, 
         });
     } catch (error) {
         // Log error if fetching fails
@@ -52,16 +51,13 @@ const getComments = (req, res) => {
  * @param {Object} res - The HTTP response object
  * @returns {JSON} - A JSON response with the comment or an error message
  */
-const getCommentById = (req, res) => {
+const getCommentById = async(req, res) => {
     try {
         // Extract the comment ID from URL parameters
         const commentId = req.params.id; 
 
         // Fetch all comments
-        const comments = commentArray(); 
-
-        // Find the specific comment by ID
-        const comment = comments.find(c => c.id === commentId);  
+        const comment= await FetchCommentById(commentId); 
 
         if (!comment) {
             // Return 404 if comment is not found
@@ -88,7 +84,7 @@ const getCommentById = (req, res) => {
             success: false,
             statusCode: 500,
             error: {
-                message: 'Internal Server Error.',
+                message: 'Error while fetching the comment by ID',
             },
         });
     }
@@ -102,31 +98,15 @@ const getCommentById = (req, res) => {
  * @param {Object} res - The HTTP response object
  * @returns {JSON} - A JSON response with the newly added comment or an error message
  */
-const addComment = (req, res) => {
+const addComment = async(req, res) => {
     try {
         // Destructure the incoming request body
         const { name, email, comment } = req.body;  
+        const nwComment = comment.trim(); 
 
-        // Check if the email is already used
-        const comments = commentArray();
-
-          // Trim leading/trailing spaces from comment
-          const nwComment = comment.trim(); 
-
-        const emailExists = comments.some(c => c.email === email);
-        if (emailExists) {
-            return res.status(400).json({
-                success: false,
-                statusCode: 400,
-                error: {
-                    message: 'Email already in use.',
-                    details: 'Please use a unique email address.',
-                },
-            });
-        }
 
         // Validate comment: must be a non-empty string
-        if (!comment || typeof comment !== 'string') {
+        if (!comment || typeof comment !== 'string') { 
             return res.status(400).json({
                 success: false,
                 statusCode: 400,
@@ -135,22 +115,31 @@ const addComment = (req, res) => {
                 },
             });
         }
-
+        
+        // check for email
+        if (await checkIfEmailExists(email)) {
+            return res.status(400).json({
+                success: false,
+                statusCode: 400,
+                error: {
+                    message: 'Email already in use or not a valid email.',
+                    details: 'Please use a unique and valid email address.',
+                },
+            });
+        }  
+    
         // Create a new comment object
         const newComment = {
             // Generate a unique ID for the new comment
-            id: uuidv4(),  
-            name,
-            email,
+            name:name,
+            email:email,
             comment:nwComment,
         };
 
         // Add the new comment to the array
-        comments.push(newComment);
-
-        // Update the file with the new comments array
-        UpdateFile(comments);
-
+        const response = await UpdateFile(newComment);
+        console.log(response);
+    
         // Return 201 with the newly added comment
         return res.status(201).json({
             success: true,
@@ -180,36 +169,19 @@ const addComment = (req, res) => {
  * @param {Object} res - The HTTP response object
  * @returns {JSON} - A JSON response with the updated comment or an error message
  */
-const editComment = (req, res) => {
+const editComment = async (req, res) => {
     try {
         // Extract the comment ID from URL parameters
-        const commentId = req.params.id;  
+        const commentId = req.params.id;
 
-        // Destructure the incoming request body
-        const { name, email, comment } = req.body;
+        // Destructure the incoming request body to get the comment content
+        const { comment } = req.body;
 
-        // Trim leading/trailing spaces from comment
-        const newComment = comment.trim();  
-        
-
-        // Fetch all comments from the file
-        const comments = commentArray();
-
-        // Ensure no comment with the same email already exists
-        const emailExists = comments.some(c => c.email === email && c.id !== commentId);
-        if (emailExists) {
-            return res.status(400).json({
-                success: false,
-                statusCode: 400,
-                error: {
-                    message: 'Email already in use.',
-                    details: 'Please use a unique email address.',
-                },
-            });
-        }
+        // Trim leading/trailing spaces from the comment
+        const newComment = comment.trim();
 
         // Validate comment: must be a non-empty string
-        if (typeof comment !== 'string' || comment.trim() === '') {
+        if (typeof newComment !== 'string' || newComment === '') {
             return res.status(400).json({
                 success: false,
                 statusCode: 400,
@@ -220,42 +192,32 @@ const editComment = (req, res) => {
             });
         }
 
-        // Find the comment by ID
-        const commentIndex = comments.findIndex(c => c.id === commentId);
-
-        // Handle the case where the comment ID is not found
-        if (commentIndex === -1) {   
+        // Fetch the existing comment by ID
+        const existingComment = await FetchCommentById(commentId);
+        if (!existingComment) {
             return res.status(404).json({
                 success: false,
                 statusCode: 404,
                 error: {
-                    message: 'Comment not found with the given id.',
+                    message: 'Comment not found.',
+                    details: 'No comment found with the given ID.',
                 },
             });
         }
 
-        // Update the comment with the new details
-        comments[commentIndex] = {
-            ...comments[commentIndex],  // Retain other properties (e.g., id)
-            name,
-            email,
-            
-            comment: newComment,
-        };
-
-        // Update the file with the modified comments
-        UpdateFile(comments);
+        // Update the comment with the new content
+        await updateComment(commentId, newComment);
 
         // Return success response with the updated comment
         return res.status(200).json({
             success: true,
             statusCode: 200,
             message: 'Comment updated successfully.',
-            data: comments[commentIndex],
+            data: existingComment,  // Return the updated comment data
         });
     } catch (error) {
         // Log error if update fails
-        console.error('Error updating comment:', error.message);  
+        console.error('Error updating comment:', error.message);
         return res.status(500).json({
             success: false,
             statusCode: 500,
@@ -267,6 +229,7 @@ const editComment = (req, res) => {
     }
 };
 
+
 /**
  * Deletes a comment by its ID.
  * Ensures the comment exists before attempting deletion.
@@ -275,34 +238,24 @@ const editComment = (req, res) => {
  * @param {Object} res - The HTTP response object
  * @returns {JSON} - A JSON response confirming the deletion or an error message
  */
-const deleteComment = (req, res) => {
+const deleteComment = async(req, res) => {
     try {
         // Extract the comment ID from URL parameters
         const commentId = req.params.id;  
 
-        // Fetch all comments
-        const comments = commentArray();
-
-        // Find the index of the comment by ID
-        const commentIndex = comments.findIndex(c => c.id === commentId);
-
-        // Handle the case where the comment ID is not found
-        if (commentIndex === -1) {
+        const existingComment = await FetchCommentById(commentId);
+        if (!existingComment) {
             return res.status(404).json({
                 success: false,
                 statusCode: 404,
                 error: {
-                    message: 'Comment not found with the given id.',
+                    message: 'Comment not found.',
+                    details: 'No comment found with the given ID.',
                 },
             });
         }
-
-        // Remove the comment from the array
-        comments.splice(commentIndex, 1);
-
-        // Update the file after deletion
-        UpdateFile(comments);
-
+        
+        await deleteCommentbyId(commentId);
         // Return success response
         return res.status(200).json({
             success: true,

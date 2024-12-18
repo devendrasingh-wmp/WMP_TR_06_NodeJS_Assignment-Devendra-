@@ -1,18 +1,21 @@
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-const commentRoutes = require('./routes/commentRoute');
+const commentRoutes = require('./routes/comment.routes');
+app.use(bodyParser.json());
 
 // swagger packages
 const swaggerUI = require('swagger-ui-express');
-const swaggerSpec = require('./swaggerDocs');
+const swaggerSpec = require('./SwaggerConfig/swaggerDocs');
 
 // Documenting the swagger 
 
 app.use("/api-docs",swaggerUI.serve,swaggerUI.setup(swaggerSpec));
 
-
-app.use(bodyParser.json());
+// ===================== || DB Connection with Sequilize || ================
+const { testDbConnection } = require('./DBConfig/sequilizeConfig');
+testDbConnection();
+// ===================== End DB Connection =====================
 
 // Use the comment routes
 app.use('/user', commentRoutes);

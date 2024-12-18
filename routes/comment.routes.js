@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const commentController = require('../controllers/commentController');
-const { validEmail, validData } = require('../middlewares/userMiddlewares');
+const commentController = require('../comment/comment.controllers');
+const { validEmail, validData } = require('../middlewares/comment.validations');
 
 /**
  * @swagger
@@ -121,8 +121,8 @@ router.get('/comments/:id', commentController.getCommentById);
  *                       type: string
  *       400:
  *          description: Error while adding comment.
- */
-router.post('/comments/add', validEmail, validData, commentController.addComment);
+ */ 
+router.post('/comments/add', validData,commentController.addComment);
 
 /**
  * @swagger
@@ -176,7 +176,7 @@ router.post('/comments/add', validEmail, validData, commentController.addComment
  *                     comment:
  *                       type: string
  */
-router.put('/comments/edit/:id', validEmail, validData, commentController.editComment);
+router.put('/comments/edit/:id', commentController.editComment);
 
 /**
  * @swagger
